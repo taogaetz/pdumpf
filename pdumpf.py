@@ -6,13 +6,13 @@ import os
 import re  # Import the regular expression module
 
 
-def convert_pdf_to_ppms(pdf_path, output_dir, dpi=150):
+def convert_pdf_to_jpgs(pdf_path, output_dir, dpi=150):
     """
-    Converts a PDF file to a series of PPM images, handling errors and edge cases.
+    Converts a PDF file to a series of JPG images using ImageMagick.
 
     Args:
         pdf_path (str): Path to the input PDF file.
-        output_dir (str): Path to the directory where PPM images will be saved.
+        output_dir (str): Path to the directory where JPG images will be saved.
         dpi (int, optional): The DPI (dots per inch) for the conversion. Defaults to 150.
     """
     # 1. Validate input PDF path
@@ -21,71 +21,38 @@ def convert_pdf_to_ppms(pdf_path, output_dir, dpi=150):
         return
 
     # 2. Create output directory if it doesn't exist
-    os.makedirs(output_dir, exist_ok=True)  # Use exist_ok to avoid errors if it exists
+    os.makedirs(output_dir, exist_ok=True)
 
-    # 3. Use pdftoppm to convert PDF to PPMs (and get page count from it)
+    # 3. Use ImageMagick's convert command
     try:
-        # Construct the command.  Crucially, add -progress to get page count.
+        print(f"Converting PDF: {pdf_path} to JPGs in {output_dir} at {dpi} dpi.")
         command = [
-            "pdftoppm",
-            "-f",
-            "1",  # Start from page 1
-            "-l",
-            "",  # No limit initially, we'll parse output
-            "-r",
+            "convert",
+            "-density",
             str(dpi),
-            "-progress",  # Get page count in a portable way
             pdf_path,
-            os.path.join(output_dir, "page"),  # Output filename *prefix*
+            os.path.join(output_dir, "page-%03d.jpg"),  # Output filename pattern
         ]
-        result = subprocess.run(
-            command, capture_output=True, text=True, check=True
-        )  # capture output as text, check raises exception on error.
+        result = subprocess.run(command, capture_output=True, text=True, check=True)
 
-        # Parse the output to get the number of pages.  This is much more robust.
-        num_pages = 0
-        for line in result.stderr.splitlines():  # pdftoppm prints to standard error
-            match = re.search(r"Page (\d+)/(\d+)", line)
-            if match:
-                num_pages = int(match.group(2))  # get the *total* pages.
-                break  # only need the last one.
-        if num_pages == 0:
-            print("Error: Could not determine number of pages from pdftoppm output.")
-            print(f"Standard Error:\n{result.stderr}")  # Print stderr to help debug
-            return
-
-        print(
-            f"Converting {num_pages} pages from {pdf_path} to PPMs in {output_dir} at {dpi} dpi."
-        )
-
-        # 4. Rename files to be correct.
-        for page in range(1, num_pages + 1):
-            old_ppm_path = os.path.join(
-                output_dir, f"page-{page}-{page}.ppm"
-            )  # pdftoppm adds the page number
-            new_ppm_path = os.path.join(
-                output_dir, f"page-{page}.ppm"
-            )  # correct filename
-            if os.path.exists(old_ppm_path):  # check exists
-                os.rename(old_ppm_path, new_ppm_path)
-            else:
-                print(
-                    f"Warning: Expected file {old_ppm_path} was not created.  Check pdftoppm output."
-                )
-
-        print("✅ All pages converted to .ppm and saved.")
+        # ImageMagick usually prints to standard output, even for conversions.
+        print(result.stdout)
+        print("✅ All pages converted to .jpg and saved.")
 
     except subprocess.CalledProcessError as e:
-        print(f"Error running pdftoppm: {e}")
-        print(f"Command: {e.cmd}")  # Print the command that failed
+        print(f"Error running ImageMagick convert: {e}")
+        print(f"Command: {e.cmd}")
         print(f"Return code: {e.returncode}")
-        print(f"Standard Output:\n{e.output}")  # show the output
+        print(f"Standard Output:\n{e.output}")
         print(f"Standard Error:\n{e.stderr}")
-        return  # Exit the function on error
-
+        return
     except FileNotFoundError:
-        print("Error: pdftoppm is not installed or not in your system's PATH.")
-        print("Please install poppler (which provides pdftoppm) and try again.")
+        print(
+            "Error: ImageMagick's convert command is not installed or not in your system's PATH."
+        )
+        print(
+            "Please install ImageMagick and ensure the 'convert' command is accessible."
+        )
         return
     except Exception as e:
         print(f"An unexpected error occurred: {e}")
@@ -94,19 +61,21 @@ def convert_pdf_to_ppms(pdf_path, output_dir, dpi=150):
 
 def main():
     """
-    Parses command-line arguments and calls the PDF to PPM conversion function.
+    Parses command-line arguments and calls the PDF to JPG conversion function.
     """
-    parser = argparse.ArgumentParser(description="Convert PDF to .ppm images.")
+    parser = argparse.ArgumentParser(
+        description="Convert PDF to JPG images using ImageMagick."
+    )
     parser.add_argument("pdf", help="Input PDF file")
     parser.add_argument(
-        "--output-dir", default="output_ppms", help="Directory to save .ppm files"
+        "--output-dir", default="output_jpgs", help="Directory to save JPG files"
     )
     parser.add_argument(
         "--dpi", type=int, default=150, help="DPI for conversion (default: 150)"
     )
 
     args = parser.parse_args()
-    convert_pdf_to_ppms(args.pdf, args.output_dir, args.dpi)
+    convert_pdf_to_jpgs(args.pdf, args.output_dir, args.dpi)
 
 
 if __name__ == "__main__":
